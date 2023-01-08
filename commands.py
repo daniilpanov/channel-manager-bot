@@ -1,3 +1,4 @@
+from DB import DB
 from config import reply, get_dialog, get_dialog_with_parsing, reg, bot_func, bot, current
 from telebot import types
 
@@ -61,7 +62,7 @@ class Command:
 
 # Multi commands
 def check_name(name):
-    return True
+    return len(DB.query(sql='SELECT * FROM alliances WHERE name=%s', params=(name,))) <= 0
 
 
 class Watch(Command):
@@ -88,8 +89,7 @@ class Watch(Command):
         return True
 
     def description_first_id(self, message):
-        if message.text != '-':
-            self.data.append(message.text)
+        self.data.append(message.text if message.text != '-' else None)
         self.reply(message, get_dialog_with_parsing('watch', 3, message))
         return True
 
@@ -114,13 +114,44 @@ class Watch(Command):
         return True
 
     def finish(self, message):
+        id = message.from_user.id
+        self.data.append(id)
+        self.data.append(message.text if message.text != '-' else None)
         super().finish(message)
-        self.reply(message, get_dialog_with_parsing('watch', 8, message, {'alliance_name': self.data[0]}))
+        if DB.query(
+                sql='''insert into alliances 
+                (name, description, channel1, hashtag1, channel2, hashtag2, user_tg_id, days_alive)
+                value (%s, %s, %s, %s, %s, %s, %s, %s)''' if self.data[-1]
+                else '''insert into alliances (name, description, channel1, hashtag1, channel2, hashtag2, user_tg_id)
+                value (%s, %s, %s, %s, %s, %s, %s)''',
+                params=self.data if self.data[-1] else self.data[0:-1],
+        ) is not False:
+            alliance_id = DB.query(
+                sql='SELECT id FROM alliances WHERE name=%s AND user_tg_id=%s',
+                params=(self.data[0], id)
+            )
+            if DB.query('insert into tasks (alliance_id, user_tg_id) value (%s, %s)', params=(alliance_id[0][0], id)) \
+                    is not False:
+                self.reply(message, get_dialog_with_parsing('watch', 8, message, {'alliance_name': self.data[0]}))
+            else:
+                DB.connection.rollback()
+                self.reply(message, get_dialog('__server_error'))
+        else:
+            self.reply(message, get_dialog('__server_error'))
+
+
+def check_alliance(alliance, user_id):
+    alliance = DB.query(
+        sql='''SELECT channel1, channel2, alliances.id, status FROM alliances
+        JOIN tasks ON (tasks.alliance_id=alliances.id) WHERE name=%s AND alliances.user_tg_id=%s''',
+        params=(alliance, user_id))
+    return alliance[0] if len(alliance) > 0 else None
 
 
 class Endwatch(Command):
     def __init__(self, message):
         super().__init__(message)
+        self.alliance = None
         command, *data = message.text[1:].split()
         data = ' '.join(data)
         if not data:
@@ -144,28 +175,27 @@ class Endwatch(Command):
         else:
             data = message.text
 
-        alliance = self.check_alliance(data)
-        if not alliance:
+        self.alliance = check_alliance(data, message.from_user.id)
+        if not self.alliance:
             reply(message, get_dialog_with_parsing('endwatch', 4, message))
             self.result = True
             return False
+        msgtext = get_dialog_with_parsing('endwatch', 0, message) if self.alliance[3] is None \
+            else get_dialog_with_parsing('endwatch', 6, message)
         keyboard = types.InlineKeyboardMarkup([
             [types.InlineKeyboardButton(text=get_dialog_with_parsing('endwatch', 1, message), callback_data='11')],
-            [types.InlineKeyboardButton(text=get_dialog_with_parsing('endwatch', 2, message, {'1': alliance[0]}),
+            [types.InlineKeyboardButton(text=get_dialog_with_parsing('endwatch', 2, message, {'1': self.alliance[0]}),
                                         callback_data='10')],
-            [types.InlineKeyboardButton(text=get_dialog_with_parsing('endwatch', 8, message, {'2': alliance[1]}),
+            [types.InlineKeyboardButton(text=get_dialog_with_parsing('endwatch', 2, message, {'1': self.alliance[1]}),
                                         callback_data='01')],
             [types.InlineKeyboardButton(text=get_dialog_with_parsing('endwatch', 3, message), callback_data='00')],
         ])
-        bot.reply_to(message, text=get_dialog_with_parsing('endwatch', 0, message), reply_markup=keyboard)
+        bot.reply_to(message, text=msgtext, reply_markup=keyboard)
         self.state += 1
         return True
 
     def do_nothing(self):
         pass
-
-    def check_alliance(self, alliance):
-        return ['dsf', 'sdfds']
 
 
 def init():
@@ -194,7 +224,8 @@ def init():
 
     @bot.callback_query_handler(func=lambda x: True)
     def endwatch_inlines(call):
-        if call.message and isinstance(current[call.message.reply_to_message.from_user.id], Endwatch):
+        curr = current[call.message.reply_to_message.from_user.id]
+        if call.message and isinstance(curr, Endwatch):
             match call.data:
                 case '00':
                     reply(call.message.reply_to_message,
@@ -203,30 +234,96 @@ def init():
                 case '10':
                     reply(call.message.reply_to_message,
                           get_dialog_with_parsing('endwatch', 5, call.message.reply_to_message))
+                    DB.query(
+                        sql='update tasks set status=FALSE, guilty=FALSE where alliance_id=%s',
+                        params=(curr.alliance[2],)
+                    )
                     current[call.message.reply_to_message.from_user.id] = None
                 case '01':
                     reply(call.message.reply_to_message,
                           get_dialog_with_parsing('endwatch', 5, call.message.reply_to_message))
+                    DB.query(
+                        sql='update tasks set status=FALSE, guilty=TRUE where alliance_id=%s',
+                        params=(curr.alliance[2],)
+                    )
                     current[call.message.reply_to_message.from_user.id] = None
                 case '11':
                     reply(call.message.reply_to_message,
                           get_dialog_with_parsing('endwatch', 5, call.message.reply_to_message))
+                    DB.query(
+                        sql='update tasks set status=TRUE, guilty=NULL where alliance_id=%s',
+                        params=(curr.alliance[2],)
+                    )
                     current[call.message.reply_to_message.from_user.id] = None
 
     @bot_func
     def showactive_command(message):
         reply(message, get_dialog_with_parsing('showactive', 0, message))
-        reply(message, get_dialog_with_parsing('showactive', 1, message))
+        alliances = DB.query(
+            sql='''select alliances.name,
+                alliances.channel1, alliances.channel2, alliances.hashtag1, alliances.hashtag2 from tasks
+                join alliances on alliances.id = tasks.alliance_id
+                where status is null and tasks.user_tg_id=%s''',
+            params=(message.from_user.id,)
+        )
+        if len(alliances) > 0:
+            counter = 1
+            text = ""
+            for i in alliances:
+                text += f"{counter}. {i[0]} (@{i[1]}#{i[3]} : @{i[2]}#{i[4]})\n"
+                counter += 1
+        else:
+            text = get_dialog_with_parsing('showactive', 1, message)
+        reply(message, text)
 
     @bot_func
     def showinactive_command(message):
         reply(message, get_dialog_with_parsing('showinactive', 0, message))
-        reply(message, get_dialog_with_parsing('showinactive', 1, message))
+        alliances = DB.query(
+            sql='''select alliances.name,
+                        alliances.channel1, alliances.channel2, alliances.hashtag1, alliances.hashtag2 from tasks
+                        join alliances on alliances.id = tasks.alliance_id
+                        where status is not null and tasks.user_tg_id=%s''',
+            params=(message.from_user.id,)
+        )
+        if len(alliances) > 0:
+            counter = 1
+            text = ""
+            for i in alliances:
+                text += f"{counter}. {i[0]} (@{i[1]}#{i[3]} : @{i[2]}#{i[4]})\n"
+                counter += 1
+        else:
+            text = get_dialog_with_parsing('showinactive', 1, message)
+        reply(message, text)
 
     @bot_func
     def showall_command(message):
         reply(message, get_dialog_with_parsing('showall', 0, message))
-        reply(message, get_dialog_with_parsing('showall', 1, message))
+        alliances = DB.query(
+            sql='''select alliances.name, alliances.channel1, alliances.channel2, alliances.hashtag1, alliances.hashtag2,
+                tasks.status, tasks.guilty from tasks
+                join alliances on alliances.id = tasks.alliance_id where tasks.user_tg_id=%s''',
+            params=(message.from_user.id,)
+        )
+        print(alliances)
+        if len(alliances) > 0:
+            counter = 1
+            text = ""
+            for i in alliances:
+                text += f"{counter}. {i[0]} (@{i[1]}#{i[3]} : @{i[2]}#{i[4]}). "
+                if i[5] is None:
+                    text += "Слежка активна"
+                elif i[5] or i[5] == 1:
+                    text += "Альянс завершён успешно"
+                elif i[6] is False or i[6] == 0:
+                    text += "Канал @" + i[1] + " нарушил правила. Слежка прекращена"
+                elif i[6] is True or i[6] == 1:
+                    text += "Канал @" + i[2] + " нарушил правила. Слежка прекращена"
+                text += "\n"
+                counter += 1
+        else:
+            text = get_dialog_with_parsing('showall', 1, message)
+        reply(message, text)
 
     @bot_func
     def search_command(message):
@@ -240,18 +337,34 @@ def init():
             return
         data = ' '.join(data)
         reply(message, get_dialog_with_parsing('status', 0, message, {'status': data}))
-        reply(message, get_dialog_with_parsing('status', 1, message))
+        alliance = DB.query(
+            sql='SELECT tasks.status, tasks.guilty, alliances.channel1, alliances.channel2,'
+                'alliances.hashtag1, alliances.hashtag2 '
+                'FROM tasks JOIN alliances on alliances.id = tasks.alliance_id '
+                'where alliances.name=%s and tasks.user_tg_id=%s',
+            params=(data, message.from_user.id)
+        )
+        if len(alliance) > 0:
+            a = alliance[0]
+            text = f"Альянс {data} (@{a[2]}#{a[4]} : @{a[3]}#{a[5]}): \n"
+            text += ("активен" if a[0] is None
+                                         else "завершён " +
+                                              ("удачно." if a[0] or a[0] == 1
+                                               else "неудачно (@" + (a[2] if a[1] is True or a[1] == 1 else a[3])
+                                                    + " нарушил правила)."))
 
-    @bot_func
-    def allstatuses_command(message):
-        reply(message, get_dialog_with_parsing('allstatuses', 0, message))
+        else:
+            text = get_dialog_with_parsing('status', 1, message)
+        reply(message, text)
 
     @bot_func
     def notifications_command(message):
+        DB.query(sql='update users set notifications=%s', params=(1,))
         reply(message, get_dialog_with_parsing('notifications', 0, message))
 
     @bot_func
     def stopnotifications_command(message):
+        DB.query(sql='update users set notifications=%s', params=(0,))
         reply(message, get_dialog_with_parsing('stopnotifications', 0, message))
 
     # Register multi commands

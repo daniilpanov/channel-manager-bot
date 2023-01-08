@@ -27,6 +27,8 @@ class DB:
             return res
         except Error as e:
             print(e.msg)
+            print(sql)
+            print(params)
             return False
 
 
