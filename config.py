@@ -1,11 +1,16 @@
+import datetime
+
 from telebot import TeleBot
 from json import JSONDecoder
 
+from DB import DB
+from ENV import env
+
 # config
-token = '5831634929:AAHyOSz9Xr7yv6_p--gV1l68H-0sXDyHDck'
+token = env.get('bot_token')
 bot = TeleBot(token, parse_mode='Markdown')
 # file with dialogs
-with open('dialogs.json', encoding='UTF-8') as datafile:
+with open(env.get('dialogs'), encoding=env.get('dialogs_encoding') or 'UTF-8') as datafile:
     raw_data = ''.join(list(datafile))
     dialogs = JSONDecoder().decode(raw_data)
 
@@ -60,6 +65,22 @@ def bot_func(func):
 
 
 # ROUTER
+# Watch to users activity
+def active(message):
+    user_info = DB.query(sql='SELECT * FROM users WHERE identification=%s', params=[message.from_user.id])
+    now = datetime.datetime.now().isoformat()
+    if len(user_info) > 0:
+        DB.query(
+            sql='UPDATE users SET last_active=%s WHERE id=%s',
+            params=(now, user_info[0][0])
+        )
+    else:
+        DB.query(
+            sql='INSERT INTO users (nickname, identification, last_active) VALUE (%s, %s, %s)',
+            params=(message.from_user.username, message.from_user.id, now)
+        )
+
+
 @bot.message_handler()
 def route(message):
     global current
@@ -67,7 +88,8 @@ def route(message):
     if message.from_user.id in current and current[message.from_user.id]:
         if current[message.from_user.id].result:
             current[message.from_user.id] = None
-            return route(message)
+            route(message)
+            active(message)
         else:
             current[message.from_user.id].route(message)
     elif message.text[0] == '/':
@@ -78,3 +100,5 @@ def route(message):
             current[message.from_user.id] = MAP[command](message)
     else:
         reply(message, get_dialog('__unknown'))
+
+    active(message)
