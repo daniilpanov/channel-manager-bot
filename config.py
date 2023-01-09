@@ -40,10 +40,10 @@ def get_dialog_with_parsing(command, index, message, args=None):
 
 
 # send usual reply
-def reply(message, msg, parsing=True):
+def reply(message, msg, parsing=True, parse_mode='Markdown'):
     if hasattr(msg, 'text'):
         msg = msg.text
-    bot.send_message(message.chat.id, parse_sentence(msg, message) if parsing else msg)
+    bot.send_message(message.chat.id, parse_sentence(msg, message) if parsing else msg, parse_mode=parse_mode)
 
 
 # CORE - functions mapping and routing

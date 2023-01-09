@@ -63,7 +63,7 @@ class Command:
 # Multi commands
 def check_name(name, user_tg_id):
     res = DB.query(sql='SELECT * FROM alliances WHERE name=%s AND user_tg_id=%s', params=(name, user_tg_id))
-    return res and len(res) <= 0
+    return not res and len(res) <= 0
 
 
 class Watch(Command):
@@ -72,25 +72,20 @@ class Watch(Command):
         self.reply(message, get_dialog_with_parsing('watch', 0, message))
         self.reply(message, get_dialog_with_parsing('watch', 1, message))
         self.map = [
-            self.name_desc,
-            self.description_first_id,
+            self.name_first_id,
             self.first_id_first_hash,
             self.first_hash_second_id,
             self.second_id_second_hash,
             self.second_hash_days,
+            self.days_desc,
         ]
         self.state += 1
 
-    def name_desc(self, message):
+    def name_first_id(self, message):
         if not check_name(message.text, message.from_user.id):
             reply(message, get_dialog_with_parsing('watch', 9, message))
             return False
         self.data.append(message.text)
-        self.reply(message, get_dialog_with_parsing('watch', 2, message))
-        return True
-
-    def description_first_id(self, message):
-        self.data.append(message.text if message.text != '-' else None)
         self.reply(message, get_dialog_with_parsing('watch', 3, message))
         return True
 
@@ -114,24 +109,34 @@ class Watch(Command):
         self.reply(message, get_dialog_with_parsing('watch', 7, message))
         return True
 
-    def finish(self, message):
-        id = message.from_user.id
-        self.data.append(id)
+    def days_desc(self, message):
+        if not message.text.isdigit():
+            reply(message, get_dialog_with_parsing('watch', 10, message))
+            return False
+        self.data.append(None)
+        self.data.append(None)
         self.data.append(message.text if message.text != '-' else None)
+        self.reply(message, get_dialog_with_parsing('watch', 2, message))
+        return True
+
+    def finish(self, message):
+        self.data[-2] = user_id = message.from_user.id
+        self.data[-3] = message.text if message.text != '-' else None
         super().finish(message)
         if DB.query(
                 sql='''insert into alliances 
-                (name, description, channel1, hashtag1, channel2, hashtag2, user_tg_id, days_alive)
+                (name, channel1, hashtag1, channel2, hashtag2, description, user_tg_id, days_alive)
                 value (%s, %s, %s, %s, %s, %s, %s, %s)''' if self.data[-1]
-                else '''insert into alliances (name, description, channel1, hashtag1, channel2, hashtag2, user_tg_id)
+                else '''insert into alliances
+                (name, channel1, hashtag1, channel2, hashtag2, description, user_tg_id)
                 value (%s, %s, %s, %s, %s, %s, %s)''',
                 params=self.data if self.data[-1] else self.data[0:-1],
         ) is not False:
             alliance_id = DB.query(
                 sql='SELECT id FROM alliances WHERE name=%s AND user_tg_id=%s',
-                params=(self.data[0], id)
+                params=(self.data[0], user_id)
             )
-            if DB.query('insert into tasks (alliance_id, user_tg_id) value (%s, %s)', params=(alliance_id[0][0], id)) \
+            if DB.query('insert into tasks (alliance_id, user_tg_id) value (%s, %s)', params=(alliance_id[0][0], user_id)) \
                     is not False:
                 self.reply(message, get_dialog_with_parsing('watch', 8, message, {'alliance_name': self.data[0]}))
             else:
@@ -145,7 +150,8 @@ def check_alliance(alliance, user_id):
     alliance = DB.query(
         sql='''SELECT channel1, channel2, alliances.id, status FROM alliances
         JOIN tasks ON (tasks.alliance_id=alliances.id) WHERE name=%s AND alliances.user_tg_id=%s''',
-        params=(alliance, user_id))
+        params=(alliance, user_id),
+    )
     return alliance[0] if len(alliance) > 0 else None
 
 
@@ -199,12 +205,17 @@ class Endwatch(Command):
         pass
 
 
+def channel(data):
+    return data.replace('_', '\\_')
+
+
 def init():
     # Register simple commands
     # Welcome (/start)
     @bot_func
     def start_command(message):
-        reply(message, get_dialog_with_parsing('start', 0, message))
+        user_info = DB.query(sql='SELECT id FROM users WHERE identification=%s', params=(message.from_user.id,))
+        reply(message, get_dialog_with_parsing('start', int(bool(user_info and len(user_info) > 0)), message))
 
     # Help (/help)
     @bot_func
@@ -266,11 +277,11 @@ def init():
                 where status is null and tasks.user_tg_id=%s''',
             params=(message.from_user.id,)
         )
-        if len(alliances) > 0:
+        if alliances and len(alliances) > 0:
             counter = 1
             text = ""
             for i in alliances:
-                text += f"{counter}. {i[0]} (@{i[1]}#{i[3]} : @{i[2]}#{i[4]})\n"
+                text += f"{counter}. {channel(i[0])} (@{channel(i[1])}#{channel(i[3])} : @{channel(i[2])}#{channel(i[4])})\n"
                 counter += 1
         else:
             text = get_dialog_with_parsing('showactive', 1, message)
@@ -286,11 +297,11 @@ def init():
                         where status is not null and tasks.user_tg_id=%s''',
             params=(message.from_user.id,)
         )
-        if len(alliances) > 0:
+        if alliances and len(alliances) > 0:
             counter = 1
             text = ""
             for i in alliances:
-                text += f"{counter}. {i[0]} (@{i[1]}#{i[3]} : @{i[2]}#{i[4]})\n"
+                text += f"{counter}. {channel(i[0])} (@{channel(i[1])}#{channel(i[3])} : @{channel(i[2])}#{channel(i[4])})\n"
                 counter += 1
         else:
             text = get_dialog_with_parsing('showinactive', 1, message)
@@ -305,12 +316,11 @@ def init():
                 join alliances on alliances.id = tasks.alliance_id where tasks.user_tg_id=%s''',
             params=(message.from_user.id,)
         )
-        print(alliances)
-        if len(alliances) > 0:
+        if alliances and len(alliances) > 0:
             counter = 1
             text = ""
             for i in alliances:
-                text += f"{counter}. {i[0]} (@{i[1]}#{i[3]} : @{i[2]}#{i[4]}). "
+                text += f"{counter}. {channel(i[0])} (@{channel(i[1])}#{channel(i[3])} : @{channel(i[2])}#{channel(i[4])}). "
                 if i[5] is None:
                     text += "Слежка активна"
                 elif i[5] or i[5] == 1:
@@ -344,13 +354,14 @@ def init():
                 'where alliances.name=%s and tasks.user_tg_id=%s',
             params=(data, message.from_user.id)
         )
-        if len(alliance) > 0:
+        if alliance and len(alliance) > 0:
             a = alliance[0]
-            text = f"Альянс {data} (@{a[2]}#{a[4]} : @{a[3]}#{a[5]}): \n"
+            text = f"Альянс {data} (@{channel(a[2])}#{channel(a[4])} : @{channel(a[3])}#{channel(a[5])}): \n"
             text += ("активен" if a[0] is None
                                          else "завершён " +
                                               ("удачно." if a[0] or a[0] == 1
-                                               else "неудачно (@" + (a[2] if a[1] is True or a[1] == 1 else a[3])
+                                               else "неудачно (@" + (channel(a[2]) if a[1] is True or a[1] == 1
+                                                                     else channel(a[3]))
                                                     + " нарушил правила)."))
 
         else:
