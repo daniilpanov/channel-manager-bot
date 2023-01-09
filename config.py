@@ -27,7 +27,7 @@ def parse_sentence(sentence, message, args=None):
         'msg_name': lambda msg: msg.from_user.first_name
     }
     if args:
-        repl |= args
+        repl = {**repl, **args}
     for key in repl:
         sentence = sentence.replace('{' + key + '}', repl[key](message) if callable(repl[key]) else repl[key])
     
@@ -69,7 +69,7 @@ def bot_func(func):
 def active(message):
     user_info = DB.query(sql='SELECT * FROM users WHERE identification=%s', params=[message.from_user.id])
     now = datetime.datetime.now().isoformat()
-    if len(user_info) > 0:
+    if user_info and len(user_info) > 0:
         DB.query(
             sql='UPDATE users SET last_active=%s WHERE id=%s',
             params=(now, user_info[0][0])
@@ -98,6 +98,8 @@ def route(message):
         print(f'User {user} sent the command {command}')
         if command in MAP:
             current[message.from_user.id] = MAP[command](message)
+        else:
+            reply(message, get_dialog('__unknown'))
     else:
         reply(message, get_dialog('__unknown'))
 

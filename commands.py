@@ -61,8 +61,9 @@ class Command:
 
 
 # Multi commands
-def check_name(name):
-    return len(DB.query(sql='SELECT * FROM alliances WHERE name=%s', params=(name,))) <= 0
+def check_name(name, user_tg_id):
+    res = DB.query(sql='SELECT * FROM alliances WHERE name=%s AND user_tg_id=%s', params=(name, user_tg_id))
+    return res and len(res) <= 0
 
 
 class Watch(Command):
@@ -81,7 +82,7 @@ class Watch(Command):
         self.state += 1
 
     def name_desc(self, message):
-        if not check_name(message.text):
+        if not check_name(message.text, message.from_user.id):
             reply(message, get_dialog_with_parsing('watch', 9, message))
             return False
         self.data.append(message.text)
@@ -226,35 +227,34 @@ def init():
     def endwatch_inlines(call):
         curr = current[call.message.reply_to_message.from_user.id]
         if call.message and isinstance(curr, Endwatch):
-            match call.data:
-                case '00':
-                    reply(call.message.reply_to_message,
-                          get_dialog_with_parsing('cancel', 0, call.message.reply_to_message))
-                    current[call.message.reply_to_message.from_user.id] = None
-                case '10':
-                    reply(call.message.reply_to_message,
-                          get_dialog_with_parsing('endwatch', 5, call.message.reply_to_message))
-                    DB.query(
-                        sql='update tasks set status=FALSE, guilty=FALSE where alliance_id=%s',
-                        params=(curr.alliance[2],)
-                    )
-                    current[call.message.reply_to_message.from_user.id] = None
-                case '01':
-                    reply(call.message.reply_to_message,
-                          get_dialog_with_parsing('endwatch', 5, call.message.reply_to_message))
-                    DB.query(
-                        sql='update tasks set status=FALSE, guilty=TRUE where alliance_id=%s',
-                        params=(curr.alliance[2],)
-                    )
-                    current[call.message.reply_to_message.from_user.id] = None
-                case '11':
-                    reply(call.message.reply_to_message,
-                          get_dialog_with_parsing('endwatch', 5, call.message.reply_to_message))
-                    DB.query(
-                        sql='update tasks set status=TRUE, guilty=NULL where alliance_id=%s',
-                        params=(curr.alliance[2],)
-                    )
-                    current[call.message.reply_to_message.from_user.id] = None
+            if call.data == '00':
+                reply(call.message.reply_to_message,
+                      get_dialog_with_parsing('cancel', 0, call.message.reply_to_message))
+                current[call.message.reply_to_message.from_user.id] = None
+            elif call.data == '10':
+                reply(call.message.reply_to_message,
+                      get_dialog_with_parsing('endwatch', 5, call.message.reply_to_message))
+                DB.query(
+                    sql='update tasks set status=FALSE, guilty=FALSE where alliance_id=%s',
+                    params=(curr.alliance[2],)
+                )
+                current[call.message.reply_to_message.from_user.id] = None
+            elif call.data == '01':
+                reply(call.message.reply_to_message,
+                      get_dialog_with_parsing('endwatch', 5, call.message.reply_to_message))
+                DB.query(
+                    sql='update tasks set status=FALSE, guilty=TRUE where alliance_id=%s',
+                    params=(curr.alliance[2],)
+                )
+                current[call.message.reply_to_message.from_user.id] = None
+            elif call.data == '11':
+                reply(call.message.reply_to_message,
+                      get_dialog_with_parsing('endwatch', 5, call.message.reply_to_message))
+                DB.query(
+                    sql='update tasks set status=TRUE, guilty=NULL where alliance_id=%s',
+                    params=(curr.alliance[2],)
+                )
+                current[call.message.reply_to_message.from_user.id] = None
 
     @bot_func
     def showactive_command(message):

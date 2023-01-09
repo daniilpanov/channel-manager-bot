@@ -3,7 +3,7 @@ from ENV import env
 
 
 class DB:
-    def __init__(self, host, user, password, db_name, port='3306'):
+    def __init__(self, host, user, password, db_name, port='3306', prefix=None):
         try:
             self.connection = connect(
                 host=host,
@@ -13,12 +13,16 @@ class DB:
                 port=port,
             )
             self.success = True
+            self.prefix = prefix
         except Error as e:
             print(e)
             self.connection = None
             self.success = False
 
-    def query(self, sql, params=None):
+    def query(self, sql, params=None, prefix=True):
+        if prefix:
+            sql = add_prefix(sql)
+        
         try:
             cursor = self.connection.cursor()
             cursor.execute(sql, params)
@@ -38,4 +42,11 @@ DB = DB(
     env.get('db_password'),
     env.get('db_name'),
     env.get('db_port'),
+    env.get('db_prefix'),
 )
+
+
+def add_prefix(sql):
+    return sql.replace('alliances', DB.prefix + 'alliances')\
+        .replace('tasks', DB.prefix + 'tasks')\
+        .replace('users', DB.prefix + 'users')
