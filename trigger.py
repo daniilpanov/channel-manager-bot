@@ -1,5 +1,5 @@
 from ENV import env
-from DB import DB
+from DB import db
 from telethon import TelegramClient, events
 
 
@@ -12,7 +12,7 @@ class WatchedObject:
 
 
 # Добавить проверку на истечение срока
-tasks = DB.query(
+tasks = db.query(
     sql='''SELECT alliances.channel1, alliances.hashtag1, alliances.channel2, alliances.hashtag2 
     FROM tasks JOIN alliances ON alliances.id = tasks.alliance_id 
     WHERE tasks.status IS NULL AND tasks.guilty IS NULL''',

@@ -3,7 +3,7 @@ import datetime
 from telebot import TeleBot
 from json import JSONDecoder
 
-from DB import DB
+from DB import db
 from ENV import env
 
 # config
@@ -67,15 +67,15 @@ def bot_func(func):
 # ROUTER
 # Watch to users activity
 def active(message):
-    user_info = DB.query(sql='SELECT * FROM users WHERE identification=%s', params=[message.from_user.id])
+    user_info = db.query(sql='SELECT * FROM users WHERE identification=%s', params=[message.from_user.id])
     now = datetime.datetime.now().isoformat()
     if user_info and len(user_info) > 0:
-        DB.query(
+        db.query(
             sql='UPDATE users SET last_active=%s WHERE id=%s',
             params=(now, user_info[0][0])
         )
     else:
-        DB.query(
+        db.query(
             sql='INSERT INTO users (nickname, identification, last_active) VALUE (%s, %s, %s)',
             params=(message.from_user.username, message.from_user.id, now)
         )

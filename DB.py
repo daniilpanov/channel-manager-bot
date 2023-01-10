@@ -3,15 +3,21 @@ from ENV import env
 
 
 class DB:
-    def __init__(self, host, user, password, db_name, port='3306', prefix=None):
+    def __init__(self, host, user, password, database, port='3306', prefix=None):
         try:
-            self.config = {'host': host, 'user': user, 'password': password, 
-'db_name': db_name, 'port': port, 'prefix': prefix}
+            self.config = {
+                'host': host,
+                'user': user,
+                'password': password,
+                'database': database,
+                'port': port,
+                'prefix': prefix,
+            }
             self.connection = connect(
                 host=host,
                 user=user,
                 password=password,
-                database=db_name,
+                database=database,
                 port=port,
             )
             self.success = True
@@ -33,15 +39,15 @@ class DB:
             return res
         except Error as e:
             print(e.msg)
-            DB = DB(**self.config)
-            if DB.success:
-                return DB.query(sql, params, prefix)
+            db = DB(**self.config)
+            if db.success:
+                return db.query(sql, params, prefix)
             print(sql)
             print(params)
             return False
 
 
-DB = DB(
+db = DB(
     env.get('db_host'),
     env.get('db_user'),
     env.get('db_password'),
@@ -52,6 +58,6 @@ DB = DB(
 
 
 def add_prefix(sql):
-    return sql.replace('alliances', DB.prefix + 'alliances')\
-        .replace('tasks', DB.prefix + 'tasks')\
-        .replace('users', DB.prefix + 'users')
+    return sql.replace('alliances', db.prefix + 'alliances')\
+        .replace('tasks', db.prefix + 'tasks')\
+        .replace('users', db.prefix + 'users')

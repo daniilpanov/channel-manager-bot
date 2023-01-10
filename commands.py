@@ -1,4 +1,4 @@
-from DB import DB
+from DB import db
 from config import reply, get_dialog, get_dialog_with_parsing, reg, bot_func, bot, current
 from telebot import types
 
@@ -62,7 +62,7 @@ class Command:
 
 # Multi commands
 def check_name(name, user_tg_id):
-    res = DB.query(sql='SELECT * FROM alliances WHERE name=%s AND user_tg_id=%s', params=(name, user_tg_id))
+    res = db.query(sql='SELECT * FROM alliances WHERE name=%s AND user_tg_id=%s', params=(name, user_tg_id))
     return not res or len(res) <= 0
 
 
@@ -123,7 +123,7 @@ class Watch(Command):
         self.data[-2] = user_id = message.from_user.id
         self.data[-3] = message.text if message.text != '-' else None
         super().finish(message)
-        if DB.query(
+        if db.query(
                 sql='''insert into alliances 
                 (name, channel1, hashtag1, channel2, hashtag2, description, user_tg_id, days_alive)
                 value (%s, %s, %s, %s, %s, %s, %s, %s)''' if self.data[-1]
@@ -132,23 +132,23 @@ class Watch(Command):
                 value (%s, %s, %s, %s, %s, %s, %s)''',
                 params=self.data if self.data[-1] else self.data[0:-1],
         ) is not False:
-            alliance_id = DB.query(
+            alliance_id = db.query(
                 sql='SELECT id FROM alliances WHERE name=%s AND user_tg_id=%s',
                 params=(self.data[0], user_id)
             )
-            if DB.query('insert into tasks (alliance_id, user_tg_id) value (%s, %s)',
+            if db.query('insert into tasks (alliance_id, user_tg_id) value (%s, %s)',
                         params=(alliance_id[0][0], user_id)) \
                     is not False:
                 self.reply(message, get_dialog_with_parsing('watch', 8, message, {'alliance_name': self.data[0]}))
             else:
-                DB.connection.rollback()
+                db.connection.rollback()
                 self.reply(message, get_dialog('__server_error'))
         else:
             self.reply(message, get_dialog('__server_error'))
 
 
 def check_alliance(alliance, user_id):
-    alliance = DB.query(
+    alliance = db.query(
         sql='''SELECT channel1, channel2, alliances.id, status FROM alliances
         JOIN tasks ON (tasks.alliance_id=alliances.id) WHERE name=%s AND alliances.user_tg_id=%s''',
         params=(alliance, user_id),
@@ -191,12 +191,12 @@ class Endwatch(Command):
         msgtext = get_dialog_with_parsing('endwatch', 0, message) if self.alliance[3] is None \
             else get_dialog_with_parsing('endwatch', 6, message)
         keyboard = types.InlineKeyboardMarkup([
-            [types.InlineKeyboardButton(text=get_dialog_with_parsing('endwatch', 1, message), callback_data='11')],
-            [types.InlineKeyboardButton(text=get_dialog_with_parsing('endwatch', 2, message, {'1': self.alliance[0]}),
+            [types.InlineKeyboardbutton(text=get_dialog_with_parsing('endwatch', 1, message), callback_data='11')],
+            [types.InlineKeyboardbutton(text=get_dialog_with_parsing('endwatch', 2, message, {'1': self.alliance[0]}),
                                         callback_data='10')],
-            [types.InlineKeyboardButton(text=get_dialog_with_parsing('endwatch', 2, message, {'1': self.alliance[1]}),
+            [types.InlineKeyboardbutton(text=get_dialog_with_parsing('endwatch', 2, message, {'1': self.alliance[1]}),
                                         callback_data='01')],
-            [types.InlineKeyboardButton(text=get_dialog_with_parsing('endwatch', 3, message), callback_data='00')],
+            [types.InlineKeyboardbutton(text=get_dialog_with_parsing('endwatch', 3, message), callback_data='00')],
         ])
         bot.reply_to(message, text=msgtext, reply_markup=keyboard)
         self.state += 1
@@ -215,7 +215,7 @@ def init():
     # Welcome (/start)
     @bot_func
     def start_command(message):
-        user_info = DB.query(sql='SELECT id FROM users WHERE identification=%s', params=(message.from_user.id,))
+        user_info = db.query(sql='SELECT id FROM users WHERE identification=%s', params=(message.from_user.id,))
         reply(message, get_dialog_with_parsing('start', int(bool(user_info and len(user_info) > 0)), message))
 
     # Help (/help)
@@ -246,7 +246,7 @@ def init():
             elif call.data == '10':
                 reply(call.message.reply_to_message,
                       get_dialog_with_parsing('endwatch', 5, call.message.reply_to_message))
-                DB.query(
+                db.query(
                     sql='update tasks set status=FALSE, guilty=FALSE where alliance_id=%s',
                     params=(curr.alliance[2],)
                 )
@@ -254,7 +254,7 @@ def init():
             elif call.data == '01':
                 reply(call.message.reply_to_message,
                       get_dialog_with_parsing('endwatch', 5, call.message.reply_to_message))
-                DB.query(
+                db.query(
                     sql='update tasks set status=FALSE, guilty=TRUE where alliance_id=%s',
                     params=(curr.alliance[2],)
                 )
@@ -262,7 +262,7 @@ def init():
             elif call.data == '11':
                 reply(call.message.reply_to_message,
                       get_dialog_with_parsing('endwatch', 5, call.message.reply_to_message))
-                DB.query(
+                db.query(
                     sql='update tasks set status=TRUE, guilty=NULL where alliance_id=%s',
                     params=(curr.alliance[2],)
                 )
@@ -271,7 +271,7 @@ def init():
     @bot_func
     def showactive_command(message):
         reply(message, get_dialog_with_parsing('showactive', 0, message))
-        alliances = DB.query(
+        alliances = db.query(
             sql='''select alliances.name,
                 alliances.channel1, alliances.channel2, alliances.hashtag1, alliances.hashtag2, alliances.days_alive
                 from tasks
@@ -296,7 +296,7 @@ def init():
     @bot_func
     def showinactive_command(message):
         reply(message, get_dialog_with_parsing('showinactive', 0, message))
-        alliances = DB.query(
+        alliances = db.query(
             sql='''
             select alliances.name, alliances.channel1, alliances.channel2, alliances.hashtag1, alliances.hashtag2
             from tasks join alliances on alliances.id = tasks.alliance_id
@@ -321,7 +321,7 @@ def init():
     @bot_func
     def showall_command(message):
         reply(message, get_dialog_with_parsing('showall', 0, message))
-        alliances = DB.query(
+        alliances = db.query(
             sql='''select alliances.name,alliances.channel1,alliances.channel2,alliances.hashtag1,alliances.hashtag2,
                 tasks.status,tasks.guilty,
                 (alliances.days_alive is null
@@ -365,7 +365,7 @@ def init():
             return
         data = ' '.join(data)
         reply(message, get_dialog_with_parsing('status', 0, message, {'status': data}))
-        alliance = DB.query(
+        alliance = db.query(
             sql='''SELECT tasks.status, tasks.guilty, alliances.channel1, alliances.channel2,
                 alliances.hashtag1, alliances.hashtag2, 
                 (alliances.days_alive is null
@@ -396,12 +396,12 @@ def init():
 
     @bot_func
     def notifications_command(message):
-        DB.query(sql='update users set notifications=%s', params=(1,))
+        db.query(sql='update users set notifications=%s', params=(1,))
         reply(message, get_dialog_with_parsing('notifications', 0, message))
 
     @bot_func
     def stopnotifications_command(message):
-        DB.query(sql='update users set notifications=%s', params=(0,))
+        db.query(sql='update users set notifications=%s', params=(0,))
         reply(message, get_dialog_with_parsing('stopnotifications', 0, message))
 
     # Register multi commands
