@@ -5,6 +5,8 @@ from ENV import env
 class DB:
     def __init__(self, host, user, password, db_name, port='3306', prefix=None):
         try:
+            self.config = {'host': host, 'user': user, 'password': password, 
+'db_name': db_name, 'port': port, 'prefix': prefix}
             self.connection = connect(
                 host=host,
                 user=user,
@@ -31,6 +33,9 @@ class DB:
             return res
         except Error as e:
             print(e.msg)
+            DB = DB(**self.config)
+            if DB.success:
+                return DB.query(sql, params, prefix)
             print(sql)
             print(params)
             return False

@@ -63,7 +63,7 @@ class Command:
 # Multi commands
 def check_name(name, user_tg_id):
     res = DB.query(sql='SELECT * FROM alliances WHERE name=%s AND user_tg_id=%s', params=(name, user_tg_id))
-    return not res and len(res) <= 0
+    return not res or len(res) <= 0
 
 
 class Watch(Command):
@@ -136,7 +136,8 @@ class Watch(Command):
                 sql='SELECT id FROM alliances WHERE name=%s AND user_tg_id=%s',
                 params=(self.data[0], user_id)
             )
-            if DB.query('insert into tasks (alliance_id, user_tg_id) value (%s, %s)', params=(alliance_id[0][0], user_id)) \
+            if DB.query('insert into tasks (alliance_id, user_tg_id) value (%s, %s)',
+                        params=(alliance_id[0][0], user_id)) \
                     is not False:
                 self.reply(message, get_dialog_with_parsing('watch', 8, message, {'alliance_name': self.data[0]}))
             else:
@@ -272,9 +273,14 @@ def init():
         reply(message, get_dialog_with_parsing('showactive', 0, message))
         alliances = DB.query(
             sql='''select alliances.name,
-                alliances.channel1, alliances.channel2, alliances.hashtag1, alliances.hashtag2 from tasks
+                alliances.channel1, alliances.channel2, alliances.hashtag1, alliances.hashtag2, alliances.days_alive
+                from tasks
                 join alliances on alliances.id = tasks.alliance_id
-                where status is null and tasks.user_tg_id=%s''',
+                where status is null and tasks.user_tg_id=%s
+                and (
+                    alliances.days_alive is null
+                     or date(date(alliances.created_at) + alliances.days_alive) >= current_date
+                ) order by alliances.id desc''',
             params=(message.from_user.id,)
         )
         if alliances and len(alliances) > 0:
@@ -291,10 +297,15 @@ def init():
     def showinactive_command(message):
         reply(message, get_dialog_with_parsing('showinactive', 0, message))
         alliances = DB.query(
-            sql='''select alliances.name,
-                        alliances.channel1, alliances.channel2, alliances.hashtag1, alliances.hashtag2 from tasks
-                        join alliances on alliances.id = tasks.alliance_id
-                        where status is not null and tasks.user_tg_id=%s''',
+            sql='''
+            select alliances.name, alliances.channel1, alliances.channel2, alliances.hashtag1, alliances.hashtag2
+            from tasks join alliances on alliances.id = tasks.alliance_id
+            where (
+                status is not null
+                 or alliances.days_alive is not null
+                  and date(date(alliances.created_at) + alliances.days_alive) < current_date
+            ) and tasks.user_tg_id=%s
+            order by alliances.id desc''',
             params=(message.from_user.id,)
         )
         if alliances and len(alliances) > 0:
@@ -311,9 +322,13 @@ def init():
     def showall_command(message):
         reply(message, get_dialog_with_parsing('showall', 0, message))
         alliances = DB.query(
-            sql='''select alliances.name, alliances.channel1, alliances.channel2, alliances.hashtag1, alliances.hashtag2,
-                tasks.status, tasks.guilty from tasks
-                join alliances on alliances.id = tasks.alliance_id where tasks.user_tg_id=%s''',
+            sql='''select alliances.name,alliances.channel1,alliances.channel2,alliances.hashtag1,alliances.hashtag2,
+                tasks.status,tasks.guilty,
+                (alliances.days_alive is null
+                 or date(date(alliances.created_at) + alliances.days_alive) >= current_date
+                ) as alive from tasks
+                join alliances on alliances.id = tasks.alliance_id where tasks.user_tg_id=%s
+                order by alliances.id desc''',
             params=(message.from_user.id,)
         )
         if alliances and len(alliances) > 0:
@@ -322,7 +337,10 @@ def init():
             for i in alliances:
                 text += f"{counter}. {channel(i[0])} (@{channel(i[1])}#{channel(i[3])} : @{channel(i[2])}#{channel(i[4])}). "
                 if i[5] is None:
-                    text += "Слежка активна"
+                    if i[6] == 0:
+                        text += "Срок слежки истёк, альянс неактивен"
+                    else:
+                        text += "Слежка активна"
                 elif i[5] or i[5] == 1:
                     text += "Альянс завершён успешно"
                 elif i[6] is False or i[6] == 0:
@@ -348,21 +366,29 @@ def init():
         data = ' '.join(data)
         reply(message, get_dialog_with_parsing('status', 0, message, {'status': data}))
         alliance = DB.query(
-            sql='SELECT tasks.status, tasks.guilty, alliances.channel1, alliances.channel2,'
-                'alliances.hashtag1, alliances.hashtag2 '
-                'FROM tasks JOIN alliances on alliances.id = tasks.alliance_id '
-                'where alliances.name=%s and tasks.user_tg_id=%s',
+            sql='''SELECT tasks.status, tasks.guilty, alliances.channel1, alliances.channel2,
+                alliances.hashtag1, alliances.hashtag2, 
+                (alliances.days_alive is null
+                 or date(date(alliances.created_at) + alliances.days_alive) >= current_date
+                ) as alive
+                FROM tasks JOIN alliances on alliances.id = tasks.alliance_id
+                where alliances.name=%s and tasks.user_tg_id=%s''',
             params=(data, message.from_user.id)
         )
         if alliance and len(alliance) > 0:
             a = alliance[0]
             text = f"Альянс {data} (@{channel(a[2])}#{channel(a[4])} : @{channel(a[3])}#{channel(a[5])}): \n"
-            text += ("активен" if a[0] is None
-                                         else "завершён " +
-                                              ("удачно." if a[0] or a[0] == 1
-                                               else "неудачно (@" + (channel(a[2]) if a[1] is True or a[1] == 1
-                                                                     else channel(a[3]))
-                                                    + " нарушил правила)."))
+            if a[0] is None:
+                if a[6] == 0:
+                    text += "неактивен. Срок слежки истёк"
+                else:
+                    text += "активен"
+            else:
+                text += ("завершён " +
+                         ("удачно." if a[0] or a[0] == 1
+                          else "неудачно (@" + (channel(a[2]) if a[1] is True or a[1] == 1
+                                                else channel(a[3]))
+                               + " нарушил правила)."))
 
         else:
             text = get_dialog_with_parsing('status', 1, message)
