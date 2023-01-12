@@ -23,14 +23,14 @@ class DB:
             self.success = True
             self.prefix = prefix
         except Error as e:
-            print(e)
+            print(e.msg)
             self.connection = None
             self.success = False
 
-    def query(self, sql, params=None, prefix=True):
+    def query(self, sql, params=None, prefix=True, retry=True):
         if prefix:
             sql = add_prefix(sql)
-        
+
         try:
             cursor = self.connection.cursor()
             cursor.execute(sql, params)
@@ -39,9 +39,10 @@ class DB:
             return res
         except Error as e:
             print(e.msg)
-            db = DB(**self.config)
-            if db.success:
-                return db.query(sql, params, prefix)
+            if retry:
+                new_inst = reconnect(DB(**self.config))
+                if new_inst.success:
+                    return new_inst.query(sql, params, False)
             print(sql)
             print(params)
             return False
@@ -58,6 +59,12 @@ db = DB(
 
 
 def add_prefix(sql):
-    return sql.replace('alliances', db.prefix + 'alliances')\
-        .replace('tasks', db.prefix + 'tasks')\
+    return sql.replace('alliances', db.prefix + 'alliances') \
+        .replace('tasks', db.prefix + 'tasks') \
         .replace('users', db.prefix + 'users')
+
+
+def reconnect(inst):
+    global db
+    db = inst
+    return inst

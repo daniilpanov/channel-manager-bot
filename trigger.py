@@ -15,7 +15,11 @@ class WatchedObject:
 tasks = db.query(
     sql='''SELECT alliances.channel1, alliances.hashtag1, alliances.channel2, alliances.hashtag2 
     FROM tasks JOIN alliances ON alliances.id = tasks.alliance_id 
-    WHERE tasks.status IS NULL AND tasks.guilty IS NULL''',
+    WHERE tasks.status IS NULL AND tasks.guilty IS NULL
+    AND (
+        alliances.days_alive IS NULL
+         OR DATE(DATE(alliances.created_at) + alliances.days_alive) >= CURRENT_DATE
+    )''',
 )
 
 all_tasks = []
@@ -24,28 +28,10 @@ input_tags = []
 
 for task in tasks:
     task_obj = WatchedObject(task[0], task[1], task[2], task[3])
-    input_channels.append(task_obj.channel1)
-    input_tags.append(task_obj.hashtag1)
 
 api_id = env.get('telethon_id')
 api_hash = env.get('telethon_hash')
-client = TelegramClient('channel_reader', api_id, api_hash)
+with TelegramClient('channel_reader', api_id, api_hash) as client:
+    # client.not_connected
+    pass
 
-
-@client.on(events.NewMessage(chats=input_channels))
-async def new_messages_handler(event):
-    for tag in input_tags:
-        if tag in str(event.message):
-            # await client.send_message(OUTPUT_CHANNEL, event.message)
-            print("OK")
-
-
-@client.on(events.MessageDeleted(chats=input_channels))
-async def deleted_message_handler(event):
-    for tag in input_tags:
-        if tag in str(event.message):
-            print("deleted")
-
-
-client.start()
-client.run_until_disconnected()
