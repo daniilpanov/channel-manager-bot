@@ -110,7 +110,7 @@ class Watch(Command):
         return True
 
     def days_desc(self, message):
-        if not message.text.isdigit():
+        if not message.text.isdigit() and message.text.strip() != '-':
             reply(message, get_dialog_with_parsing('watch', 10, message))
             return False
         self.data.append(None)
