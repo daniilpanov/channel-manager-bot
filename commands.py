@@ -396,12 +396,18 @@ def init():
 
     @bot_func
     def notifications_command(message):
-        db.query(sql='update users set notifications=%s', params=(1,))
+        db.query(
+            sql='update users set notifications=%s where users.identification=%s',
+            params=(1, message.from_user.id),
+        )
         reply(message, get_dialog_with_parsing('notifications', 0, message))
 
     @bot_func
     def stopnotifications_command(message):
-        db.query(sql='update users set notifications=%s', params=(0,))
+        db.query(
+            sql='update users set notifications=%s where users.identification=%s',
+            params=(0, message.from_user.id),
+        )
         reply(message, get_dialog_with_parsing('stopnotifications', 0, message))
 
     # Register multi commands
