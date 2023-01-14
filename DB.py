@@ -32,7 +32,7 @@ class DB:
             self._connection = None
             return False
 
-    def query(self, sql, params=None, prefix=True, simple=False, retry=True):
+    def query(self, sql, params=None, prefix=True, simple=True, retry=True):
         if prefix:
             sql = sql.replace('alliances', self.prefix + 'alliances') \
                 .replace('tasks', self.prefix + 'tasks') \
