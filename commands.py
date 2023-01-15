@@ -1,4 +1,5 @@
 import datetime
+from datetime import timedelta
 
 from DB import db
 from config import reply, get_dialog, get_dialog_with_parsing, reg, bot_func, bot, current
@@ -314,8 +315,10 @@ def init():
             counter = 1
             text = ""
             for i in alliances:
-                # and date(date(alliances.created_at) + alliances.days_alive) < current_date
-                print(datetime.date(*(i[5].split(' ')[0].split('-'))))
+                i[5] += timedelta(int(i[6]))
+                print(i[5])
+                if i[5] >= datetime.datetime.now():
+                    continue
                 text += f"{counter}. {channel(i[0])} (@{channel(i[1])}#{channel(i[3])} : @{channel(i[2])}#{channel(i[4])})\n"
                 counter += 1
         else:
