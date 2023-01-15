@@ -337,11 +337,11 @@ def init():
             for i in alliances:
                 text += f"{counter}. {channel(i[0])} (@{channel(i[1])}#{channel(i[3])} : @{channel(i[2])}#{channel(i[4])}). "
                 if i[5] is None:
-                    if i[6] == 0:
+                    if i[7] == 0:
                         text += "Срок слежки истёк, альянс неактивен"
                     else:
                         text += "Слежка активна"
-                elif i[5] or i[5] == 1:
+                elif i[5] is True or i[5] == 1:
                     text += "Альянс завершён успешно"
                 elif i[6] is False or i[6] == 0:
                     text += "Канал @" + i[1] + " нарушил правила. Слежка прекращена"
