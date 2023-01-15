@@ -275,24 +275,29 @@ def init():
     def showactive_command(message):
         reply(message, get_dialog_with_parsing('showactive', 0, message))
         alliances = db.query(
-            sql='''select alliances.name,
-                alliances.channel1, alliances.channel2, alliances.hashtag1, alliances.hashtag2, alliances.days_alive
-                from tasks
-                join alliances on alliances.id = tasks.alliance_id
-                where status is null and tasks.user_tg_id=%s
-                and (
-                    alliances.days_alive is null
-                     or date(date(alliances.created_at) + alliances.days_alive) >= current_date
-                ) order by alliances.id desc''',
+            sql='''
+                    select alliances.name, alliances.channel1, alliances.channel2, alliances.hashtag1, alliances.hashtag2,
+                    alliances.created_at, alliances.days_alive
+                    from tasks join alliances on alliances.id = tasks.alliance_id
+                    where (
+                        status is not null
+                         or alliances.days_alive is not null
+                    ) and tasks.user_tg_id=%s
+                    order by alliances.id desc''',
             params=(message.from_user.id,)
         )
+        text = ""
         if alliances and len(alliances) > 0:
-            counter = 1
-            text = ""
-            for i in alliances:
-                text += f"{counter}. {channel(i[0])} (@{channel(i[1])}#{channel(i[3])} : @{channel(i[2])}#{channel(i[4])})\n"
-                counter += 1
-        else:
+            c = 1
+            for row in alliances:
+                i = list(row)
+                i[5] += timedelta(int(i[6]))
+                if i[5] < datetime.datetime.now():
+                    continue
+                text += f"{c}. {channel(i[0])} (@{channel(i[1])}#{channel(i[3])} : @{channel(i[2])}#{channel(i[4])})\n"
+                c += 1
+
+        if text == "":
             text = get_dialog_with_parsing('showactive', 1, message)
         reply(message, text)
 
@@ -311,17 +316,18 @@ def init():
             order by alliances.id desc''',
             params=(message.from_user.id,)
         )
+        text = ""
         if alliances and len(alliances) > 0:
-            counter = 1
-            text = ""
+            c = 1
             for row in alliances:
                 i = list(row)
                 i[5] += timedelta(int(i[6]))
                 if i[5] >= datetime.datetime.now():
                     continue
-                text += f"{counter}. {channel(i[0])} (@{channel(i[1])}#{channel(i[3])} : @{channel(i[2])}#{channel(i[4])})\n"
-                counter += 1
-        else:
+                text += f"{c}. {channel(i[0])} (@{channel(i[1])}#{channel(i[3])} : @{channel(i[2])}#{channel(i[4])})\n"
+                c += 1
+
+        if text == "":
             text = get_dialog_with_parsing('showinactive', 1, message)
         reply(message, text)
 
