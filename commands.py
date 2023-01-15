@@ -336,11 +336,8 @@ def init():
         reply(message, get_dialog_with_parsing('showall', 0, message))
         alliances = db.query(
             sql='''select alliances.name,alliances.channel1,alliances.channel2,alliances.hashtag1,alliances.hashtag2,
-                tasks.status,tasks.guilty,
-                (alliances.days_alive is null
-                 or date(date(alliances.created_at) + alliances.days_alive) >= current_date
-                ) as alive from tasks
-                join alliances on alliances.id = tasks.alliance_id where tasks.user_tg_id=%s
+                tasks.status, tasks.guilty, alliances.days_alive, alliances.created_at
+                from tasks join alliances on alliances.id = tasks.alliance_id where tasks.user_tg_id=%s
                 order by alliances.id desc''',
             params=(message.from_user.id,)
         )
@@ -351,9 +348,12 @@ def init():
                 text += f"{counter}. {channel(i[0])} (@{channel(i[1])}#{channel(i[3])} : @{channel(i[2])}#{channel(i[4])}). "
                 if i[5] is None:
                     if i[7] == 0:
-                        text += "Срок слежки истёк, альянс неактивен"
-                    else:
                         text += "Слежка активна"
+                    else:
+                        end_time = i[8]
+                        end_time += timedelta(int(i[7]))
+                        text += "Срок слежки истёк, альянс неактивен" if end_time < datetime.datetime.now() \
+                            else "Слежка активна"
                 elif i[5] is True or i[5] == 1:
                     text += "Альянс завершён успешно"
                 elif i[6] is False or i[6] == 0:
