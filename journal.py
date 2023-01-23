@@ -23,13 +23,18 @@ def msg(form, day):
     elif data is False:
         return 'Расписание для этого класса ещё не занесено :('
     else:
-        text = "Расписание:\n:"
+        text = "Расписание:\n"
         for item in data:
             text += str(item['orderofitem']) + '. ' + item['name']
             if item['cab']:
                 text += ' (в кабинете №' + str(item['cab']) + ')'
             text += "\n"
         return text
+
+
+@bot.message_handler(commands=['now'])
+def current_lesson(message):
+    bot.reply_to(message, 'Эта команда пока не реализована')
 
 
 @bot.message_handler(func=lambda x: True)
