@@ -4,7 +4,7 @@ from DB import db
 from ENV import env
 from telebot import TeleBot
 
-bot = TeleBot(env.get('journal_bot_token', parse_mode='Markdown'))
+bot = TeleBot(env.get('journal_bot_token'), parse_mode='Markdown')
 
 
 def get_journal_for(form, day=None):
