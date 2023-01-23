@@ -41,7 +41,7 @@ def current_lesson(message):
 def journal_today(message):
     text = message.text
     if len(text) <= 1 or text[0] != '/' or not text[1:].isdigit():
-        bot.reply_to(message, 'Бот не распознал ваши карякули -_-')
+        bot.reply_to(message, 'Бот не распознал ваши карякули :|')
         return
 
     text = text[1:]
