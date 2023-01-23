@@ -35,7 +35,8 @@ class DB:
         if prefix:
             sql = sql.replace('alliances', self.prefix + 'alliances') \
                 .replace('tasks', self.prefix + 'tasks') \
-                .replace('users', self.prefix + 'users')
+                .replace('users', self.prefix + 'users') \
+                .replace('journal', self.prefix + 'journal')
 
         try:
             cursor = self._cursor if simple else self._dict_cursor
