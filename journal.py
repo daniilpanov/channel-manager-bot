@@ -48,3 +48,4 @@ def journal_today(message):
         bot.reply_to(message, msg(text, datetime.datetime.now().weekday() + 1))
 
 
+bot.infinity_polling()
