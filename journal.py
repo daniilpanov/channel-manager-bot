@@ -9,7 +9,8 @@ bot = TeleBot(env.get('journal_bot_token'), parse_mode='Markdown')
 
 def get_journal_for(form, day=None):
     if day:
-        return db.query(f'SELECT * FROM journal WHERE form=\'{form}\' and day={day} ORDER BY orderofitem', simple=False)\
+        return db.query(f'SELECT * FROM journal WHERE form=\'{form}\' and `dayofweek`={day} ORDER BY orderofitem',
+                        simple=False) \
                or (None if bool(db.query(f'SELECT id FROM journal WHERE form=\'{form}\'')) else False)
     else:
         return db.query(f'SELECT * FROM journal WHERE form=\'{form}\' ORDER BY `dayofweek`, orderofitem', simple=False) or False
