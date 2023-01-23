@@ -33,7 +33,7 @@ def msg(form, day):
 
 @bot.message_handler(func=lambda x: True)
 def journal_today(message):
-    text = message.text()
+    text = message.text
     if len(text) <= 1 or text[0] != '/':
         bot.reply_to(message, 'Бот не распознал ваши карякули -_-')
         return
