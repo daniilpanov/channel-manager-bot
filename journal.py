@@ -31,7 +31,7 @@ def msg(form, day):
         return text
 
 
-@bot.message_handler
+@bot.message_handler(func=lambda x: True)
 def journal_today(message):
     text = message.text()
     if len(text) <= 1 or text[0] != '/':
