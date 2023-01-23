@@ -40,18 +40,24 @@ def current_lesson(message):
 @bot.message_handler(func=lambda x: True)
 def journal_today(message):
     text = message.text
-    if len(text) <= 1 or text[0] != '/' or not text[1:].isdigit():
+    if len(text) <= 1 or text[0] != '/':
         bot.reply_to(message, 'Бот не распознал ваши карякули :|')
         return
 
     text = text[1:]
     if len(text.split(' ')) > 1:
         form, day = text.split(' ')
-        bot.reply_to(message, msg(form, day))
+        if not form.isdigit():
+            bot.reply_to(message, 'Бот не распознал ваши карякули :|')
+        else:
+            bot.reply_to(message, msg(form, day))
     elif datetime.datetime.now().weekday() == 6:
         bot.reply_to(message, 'Сегодня воскресенье, иди спать')
     else:
-        bot.reply_to(message, msg(text, datetime.datetime.now().weekday() + 1))
+        if not text.isdigit():
+            bot.reply_to(message, 'Бот не распознал ваши карякули :|')
+        else:
+            bot.reply_to(message, msg(text, datetime.datetime.now().weekday() + 1))
 
 
 bot.infinity_polling()
