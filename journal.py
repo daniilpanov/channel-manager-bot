@@ -25,9 +25,9 @@ def msg(form, day):
     else:
         text = "Расписание:\n:"
         for item in data:
-            text += item['orderofitem'] + '. ' + item['name']
+            text += str(item['orderofitem']) + '. ' + item['name']
             if item['cab']:
-                text += ' (в кабинете №' + item['cab'] + ')'
+                text += ' (в кабинете №' + str(item['cab']) + ')'
             text += "\n"
         return text
 
